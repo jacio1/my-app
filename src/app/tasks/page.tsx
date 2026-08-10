@@ -44,11 +44,11 @@ export default function TasksPage() {
     setTitle(e.target.value);
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = (id: string) => {
     setTasks((prevTasks) => prevTasks.filter((task) => task.id !== id));
   };
 
-  const handleComplete = (taskId) => {
+  const handleComplete = (taskId:string) => {
     setTasks((prevTasks) =>
       prevTasks.map((task) =>
         task.id === taskId ? { ...task, completed: !task.completed } : task,
