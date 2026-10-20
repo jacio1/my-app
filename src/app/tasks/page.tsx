@@ -3,72 +3,32 @@
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { addTask, toggleTask } from "@/store/features/tasks/tasksSlice";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import clsx from "clsx";
-import { ChangeEvent, SubmitEvent, useState } from "react";
-
-interface Task {
-  id: string;
-  title: string;
-  completed: boolean;
-  createdAt: string;
-}
+import { useState } from "react";
 
 export default function TasksPage() {
-  const [tasks, setTasks] = useState<Task[]>([]);
   const [title, setTitle] = useState("");
+  const tasks = useAppSelector((state) => state.tasks.items);
+  const dispatch = useAppDispatch();
 
-  const addTask = () => {
-    const now = new Date();
-    const formattedDate = now.toLocaleDateString("ru-RU", {
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    });
-    setTasks([
-      ...tasks,
-      {
-        id: crypto.randomUUID(),
-        title: title,
-        completed: false,
-        createdAt: formattedDate,
-      },
-    ]);
-  };
-
-  const handleSubmit = (e: SubmitEvent) => {
-    e.preventDefault();
-    addTask();
-  };
-
-  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
-    setTitle(e.target.value);
-  };
-
-  const handleDelete = (id: string) => {
-    setTasks((prevTasks) => prevTasks.filter((task) => task.id !== id));
-  };
-
-  const handleComplete = (taskId: string) => {
-    setTasks((prevTasks) =>
-      prevTasks.map((task) =>
-        task.id === taskId ? { ...task, completed: !task.completed } : task,
-      ),
-    );
+  const handleAdd = () => {
+    if (!title.trim()) return;
+    dispatch(addTask(title));
+    setTitle("");
   };
 
   return (
     <div className="container mx-auto pt-16">
       <h1>Страница задач</h1>
       <div className=" m-5 bg-secondary rounded-2xl p-4">
-        <form onSubmit={handleSubmit} className="flex gap-4 flex-col">
-          <label htmlFor="">Название задачи</label>
-          <Input
-            value={title}
-            onChange={handleChange}
-            placeholder="Введите название задачи..."
-          />
-          <Button type="submit">Добавить задачу</Button>
-        </form>
+        <Input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Введите название задачи..."
+        />
+        <Button onClick={handleAdd}>Добавить задачу</Button>
         <div className="mt-8">
           <h1 className="mb-4">Количество задач: {tasks.length}</h1>
           <ul className="flex flex-col gap-2">
@@ -84,7 +44,7 @@ export default function TasksPage() {
                   className={clsx(
                     "flex items-center gap-4 w-full h-full cursor-pointer px-4",
                   )}
-                  onClick={() => handleComplete(task.id)}
+                  onClick={() => dispatch(toggleTask(task.id))}
                 >
                   <Checkbox
                     className="rounded-xl bg-accent"
