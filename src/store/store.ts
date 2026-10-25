@@ -1,10 +1,12 @@
 import { configureStore } from "@reduxjs/toolkit";
 import tasksReducer from "./features/tasks/tasksSlice";
+import driveReducer from "./features/drive/driveSlice";
 
 export const makeStore = () => {
   return configureStore({
     reducer: {
       tasks: tasksReducer,
+      drive: driveReducer,
     },
   });
 };

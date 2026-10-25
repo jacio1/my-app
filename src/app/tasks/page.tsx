@@ -27,6 +27,7 @@ export default function TasksPage() {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Введите название задачи..."
+          autoComplete="off"
         />
         <Button onClick={handleAdd}>Добавить задачу</Button>
         <div className="mt-8">

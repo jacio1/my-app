@@ -15,7 +15,7 @@ async function authHeaders(): Promise<HeadersInit> {
 async function findFile(): Promise<{ id: string } | null> {
   const headers = await authHeaders();
   const q = encodeURIComponent(
-    `name='${FILE_NAME}' and trashed=false and mimeType='application/json'`
+    `name='${FILE_NAME}' and trashed=false and mimeType='application/json'`,
   );
   const url = `https://www.googleapis.com/drive/v3/files?q=${q}&spaces=drive&fields=files(id,name)`;
   const res = await fetch(url, { headers });
@@ -32,7 +32,7 @@ export async function loadFromDrive<T>(): Promise<DriveFile | null> {
   const headers = await authHeaders();
   const res = await fetch(
     `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`,
-    { headers }
+    { headers },
   );
   if (!res.ok) throw new Error(`Drive download failed: ${res.status}`);
   const data = (await res.json()) as T;
@@ -41,7 +41,7 @@ export async function loadFromDrive<T>(): Promise<DriveFile | null> {
 
 export async function saveToDrive<T>(
   data: T,
-  existingId: string | null
+  existingId: string | null,
 ): Promise<string> {
   const headers = await authHeaders();
 
@@ -74,7 +74,7 @@ export async function saveToDrive<T>(
           "Content-Type": `multipart/related; boundary=${boundary}`,
         },
         body,
-      }
+      },
     );
     if (!res.ok) throw new Error(`Drive upload failed: ${res.status}`);
     const json = (await res.json()) as { id: string };
@@ -91,7 +91,7 @@ export async function saveToDrive<T>(
         "Content-Type": "application/json",
       },
       body: JSON.stringify(data),
-    }
+    },
   );
   if (!res.ok) throw new Error(`Drive update failed: ${res.status}`);
   return existingId;

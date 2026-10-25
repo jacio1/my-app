@@ -1,25 +1,18 @@
+// app/page.tsx
 "use client";
 
-import { useDriveData } from "@/hooks/useDriveData";
+import { useEffect } from "react";
+import Link from "next/link";
+import { useDrive } from "@/hooks/useDrive";
 
 type Day = { id: number; title: string; description: string };
 
-const initial: Day[] = [
-  { id: 1, title: "Day 1", description: "Description for Day 1" },
-  { id: 2, title: "Day 2", description: "Description for Day 2" },
-];
+export default function DiaryPage() {
+  const { data, setData, status, hydrate } = useDrive<Day[]>();
 
-const statusText = {
-  "signed-out": "Не подключено к Google Диску",
-  loading: "Загрузка…",
-  ready: "Синхронизировано",
-  saving: "Сохранение…",
-  error: "Ошибка синхронизации",
-} as const;
-
-export default function App() {
-  const { data, setData, status, error, connect, signOut } =
-    useDriveData<Day[]>("days-cache", initial);
+  // Гидратация из localStorage — на случай, если пользователь
+  // открыл сразу главную, минуя профиль.
+  useEffect(() => { hydrate(); }, []);
 
   const addDay = () =>
     setData((prev) => {
@@ -28,32 +21,27 @@ export default function App() {
     });
 
   const updateDescription = (id: number, description: string) =>
-    setData((prev) =>
-      prev.map((d) => (d.id === id ? { ...d, description } : d))
-    );
+    setData((prev) => prev.map((d) => (d.id === id ? { ...d, description } : d)));
 
-  const exportJson = () => {
-    const blob = new Blob([JSON.stringify(data, null, 2)], {
-      type: "application/json",
-    });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = "backup.json";
-    a.click();
-    URL.revokeObjectURL(a.href);
-  };
+  // Пока данные не подгрузились из кэша/Диска — показываем загрузку
+  if (!data) return <p>Загрузка…</p>;
+
+  // Данных нет и пользователь не авторизован — предлагаем зайти в профиль
+  if (data.length === 0 && status === "signed-out") {
+    return (
+      <div style={{ maxWidth: 600, margin: "0 auto", padding: 16 }}>
+        <nav style={{ marginBottom: 16 }}><Link href="/profile">Профиль</Link></nav>
+        <p>
+          Чтобы вести дневник, войдите через Google на странице{" "}
+          <Link href="/profile">профиля</Link>.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div style={{ maxWidth: 600, margin: "0 auto", padding: 16 }}>
-      <p>
-        {statusText[status]}{" "}
-        {status === "signed-out" ? (
-          <button onClick={connect}>Войти через Google</button>
-        ) : (
-          <button onClick={signOut}>Выйти</button>
-        )}
-      </p>
-      {error && <p style={{ color: "crimson" }}>{error}</p>}
+      <nav style={{ marginBottom: 16 }}><Link href="/profile">Профиль</Link></nav>
 
       <ul>
         {data.map((day) => (
@@ -67,9 +55,7 @@ export default function App() {
           </li>
         ))}
       </ul>
-
-      <button onClick={addDay}>Добавить день</button>{" "}
-      <button onClick={exportJson}>Экспорт JSON</button>
+      <button onClick={addDay}>Добавить день</button>
     </div>
   );
 }

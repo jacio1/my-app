@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { Home, ListTodo, NotebookPen, UserCircle } from "lucide-react";
+import { Apple, Home, ListTodo, NotebookPen, UserCircle } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -21,6 +21,11 @@ const navItems = [
     label: "Дневник",
     icon: NotebookPen,
   },
+    {
+    href: "/calories",
+    label: "Питание",
+    icon: Apple,
+  },
   {
     href: "/profile",
     label: "Профиль",
@@ -32,7 +37,7 @@ export default function MobileBottomNav() {
   const pathname = usePathname();
   return (
     <nav className="shrink w-full border-t bg-background md:hidden pb-[env(safe-area-inset-bottom)]">
-      <ul className="grid grid-cols-4 ">
+      <ul className="grid grid-cols-5 ">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive =

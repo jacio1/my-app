@@ -1,8 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { hasSignedInBefore, signIn, signOut as googleSignOut } from "./auth";
-import { loadFromDrive, saveToDrive } from "./drive";
+import {
+  hasSignedInBefore,
+  signIn,
+  signOut as googleSignOut,
+} from "../lib/auth";
+import { loadFromDrive, saveToDrive } from "../lib/drive";
 
 export type Status = "signed-out" | "loading" | "ready" | "saving" | "error";
 
@@ -38,7 +42,7 @@ export function useDriveData<T>(cacheKey: string, initial: T) {
   dataRef.current = data;
 
   const fileId = useRef<string | null>(null);
-  const synced = useRef(false);   // уже подключились к Диску
+  const synced = useRef(false); // уже подключились к Диску
   const skipNext = useRef(false); // не сохранять данные, которые только что пришли с Диска
   const timer = useRef<number | undefined>(undefined);
   const autoTried = useRef(false);
@@ -71,14 +75,6 @@ export function useDriveData<T>(cacheKey: string, initial: T) {
       setError(e instanceof Error ? e.message : String(e));
     }
   }, [dirtyKey]);
-
-  // Тихая попытка входа при открытии, если ты уже входил раньше.
-  useEffect(() => {
-    if (!isBrowser) return;
-    if (autoTried.current) return;
-    autoTried.current = true;
-    if (hasSignedInBefore()) void connect();
-  }, [connect]);
 
   // Любое изменение данных: сразу в кэш, на Диск с задержкой (debounce)
   useEffect(() => {
