@@ -1,158 +1,337 @@
 "use client";
 
-const CLIENT_ID = process.env.NEXT_PUBLIC_CLIENT_ID as string;
-const SCOPE =
-  "https://www.googleapis.com/auth/drive.file " +
-  "https://www.googleapis.com/auth/userinfo.email";
 
-const TOKEN_KEY = "g-token";
-const EMAIL_KEY = "g-email";
-const FLAG = "drive-signed-in";
+import {
+  GOOGLE_CLIENT_ID,
+  GOOGLE_SCOPE,
+  clientIdProblem,
+  isGoogleConfigured,
+} from "./google-config";
+import type { GoogleProfile } from "./types";
+
+const TOKEN_KEY = "diary.google.token";
+const PROFILE_KEY = "diary.google.profile";
+const SCRIPT_SRC = "https://accounts.google.com/gsi/client";
+const SCRIPT_TIMEOUT_MS = 10_000;
+
+
+export type AuthErrorCode =
+  | "not-configured"
+  | "script-failed"
+  | "popup-closed"
+  | "popup-blocked"
+  | "access-denied"
+  | "expired"
+  | "unknown";
+
+export class GoogleAuthError extends Error {
+  readonly code: AuthErrorCode;
+
+  constructor(code: AuthErrorCode, message: string) {
+    super(message);
+    this.name = "GoogleAuthError";
+    this.code = code;
+  }
+}
+
+export function describeAuthError(error: unknown): string {
+  if (error instanceof GoogleAuthError) return error.message;
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
+
 
 type StoredToken = { value: string; expiresAt: number };
 
-let token: StoredToken | null = null;
-let email: string | null = null;
-let scriptPromise: Promise<void> | null = null;
+type TokenResponse = {
+  access_token?: string;
+  expires_in?: string | number;
+  error?: string;
+  error_description?: string;
+};
 
-declare global { interface Window { google?: any } }
+type TokenClient = {
+  requestAccessToken: (overrides?: { prompt?: string }) => void;
+};
+
+type GoogleOAuth2 = {
+  initTokenClient: (config: {
+    client_id: string;
+    scope: string;
+    prompt?: string;
+    callback: (response: TokenResponse) => void;
+    error_callback?: (error: { type?: string; message?: string }) => void;
+  }) => TokenClient;
+  revoke: (accessToken: string, done?: () => void) => void;
+};
+
+declare global {
+  interface Window {
+    google?: { accounts?: { oauth2?: GoogleOAuth2 } };
+  }
+}
+
+
 const isBrowser = typeof window !== "undefined";
 
-// ── восстановление из localStorage при импорте модуля ──
+let token: StoredToken | null = null;
+let profile: GoogleProfile | null = null;
+let scriptPromise: Promise<void> | null = null;
+let restored = false;
+
 function restore(): void {
-  if (!isBrowser || token) return;
+  if (!isBrowser || restored) return;
+  restored = true;
   try {
-    const raw = localStorage.getItem(TOKEN_KEY);
-    if (raw) {
-      const t = JSON.parse(raw) as StoredToken;
-      if (t.expiresAt > Date.now()) token = t;
+    const rawToken = localStorage.getItem(TOKEN_KEY);
+    if (rawToken) {
+      const parsed = JSON.parse(rawToken) as StoredToken;
+      if (typeof parsed?.value === "string" && typeof parsed?.expiresAt === "number") {
+        token = parsed;
+      }
     }
-    email = localStorage.getItem(EMAIL_KEY);
-  } catch {}
+    const rawProfile = localStorage.getItem(PROFILE_KEY);
+    if (rawProfile) profile = JSON.parse(rawProfile) as GoogleProfile;
+  } catch {
+  }
 }
-restore();
+
+function persistToken(): void {
+  if (!isBrowser || !token) return;
+  try {
+    localStorage.setItem(TOKEN_KEY, JSON.stringify(token));
+  } catch {
+  }
+}
+
+function persistProfile(): void {
+  if (!isBrowser) return;
+  try {
+    if (profile) localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+    else localStorage.removeItem(PROFILE_KEY);
+  } catch {
+  }
+}
+
 
 function loadScript(): Promise<void> {
   if (!isBrowser) {
     return Promise.reject(
-      new Error("Google Identity Services доступен только в браузере")
+      new GoogleAuthError("script-failed", "Google Identity Services работает только в браузере."),
     );
   }
   if (scriptPromise) return scriptPromise;
 
-  scriptPromise = new Promise((resolve, reject) => {
-    // 1. Уже готово — выходим сразу
+  scriptPromise = new Promise<void>((resolve, reject) => {
     if (window.google?.accounts?.oauth2) {
       resolve();
       return;
     }
 
-    // 2. Ждём появления window.google, а не просто onload
     const waitForGoogle = (deadline: number) => {
-      const id = window.setInterval(() => {
+      const timer = window.setInterval(() => {
         if (window.google?.accounts?.oauth2) {
-          window.clearInterval(id);
+          window.clearInterval(timer);
           resolve();
         } else if (Date.now() > deadline) {
-          window.clearInterval(id);
-          reject(
-            new Error("Google Identity Services не инициализировался за 10с")
-          );
+          window.clearInterval(timer);
+          reject(new GoogleAuthError("script-failed", "Google Identity Services не загрузился за 10 секунд."));
         }
       }, 50);
     };
 
-    // 3. Если тег уже вставлен (HMR, повторный импорт) — не дублируем
-    const existing = document.querySelector<HTMLScriptElement>(
-      'script[src="https://accounts.google.com/gsi/client"]'
-    );
+    const existing = document.querySelector<HTMLScriptElement>(`script[src="${SCRIPT_SRC}"]`);
     if (existing) {
-      waitForGoogle(Date.now() + 10_000);
+      waitForGoogle(Date.now() + SCRIPT_TIMEOUT_MS);
       return;
     }
 
-    // 4. Вставляем скрипт и ждём window.google
-    const s = document.createElement("script");
-    s.src = "https://accounts.google.com/gsi/client";
-    s.async = true;
-    s.defer = true;
-    s.onload = () => waitForGoogle(Date.now() + 10_000);
-    s.onerror = () => reject(new Error("Не удалось загрузить GIS"));
-    document.head.appendChild(s);
+    const script = document.createElement("script");
+    script.src = SCRIPT_SRC;
+    script.async = true;
+    script.defer = true;
+    script.onload = () => waitForGoogle(Date.now() + SCRIPT_TIMEOUT_MS);
+    script.onerror = () =>
+      reject(new GoogleAuthError("script-failed", "Не удалось загрузить скрипт Google (проверьте сеть / блокировщики)."));
+    document.head.appendChild(script);
+  }).catch((error) => {
+    scriptPromise = null; 
+    throw error;
   });
 
   return scriptPromise;
 }
 
-async function fetchEmail(accessToken: string): Promise<string | null> {
-  try {
-    const res = await fetch(
-      "https://www.googleapis.com/oauth2/v3/userinfo",
-      { headers: { Authorization: `Bearer ${accessToken}` } }
-    );
-    if (!res.ok) return null;
-    const j = (await res.json()) as { email?: string };
-    return j.email ?? null;
-  } catch { return null; }
+export function preloadGoogleAuth(): void {
+  if (!isBrowser) return;
+  void loadScript().catch(() => {
+  });
 }
 
-export async function signIn(): Promise<string> {
-  if (!CLIENT_ID) throw new Error("NEXT_PUBLIC_CLIENT_ID не задан");
-  await loadScript();
-  return new Promise((resolve, reject) => {
-    const client = window.google.accounts.oauth2.initTokenClient({
-      client_id: CLIENT_ID,
-      scope: SCOPE,
-      callback: async (resp: any) => {
-        if (resp.error) return reject(new Error(resp.error));
-        token = {
-          value: resp.access_token,
-          expiresAt: Date.now() + Number(resp.expires_in) * 1000 - 60_000,
-        };
-        try {
-          localStorage.setItem(TOKEN_KEY, JSON.stringify(token));
-          localStorage.setItem(FLAG, "1");
-        } catch {}
-        const e = await fetchEmail(resp.access_token);
-        if (e) {
-          email = e;
-          try { localStorage.setItem(EMAIL_KEY, e); } catch {}
+
+function assertConfigured(): void {
+  const problem = clientIdProblem();
+  if (problem) throw new GoogleAuthError("not-configured", problem);
+}
+
+function translateError(type?: string): GoogleAuthError {
+  switch (type) {
+    case "popup_closed":
+    case "popup_closed_by_user":
+      return new GoogleAuthError(
+        "popup-closed",
+        "Окно входа закрыто. Нажмите «Войти через Google» ещё раз.",
+      );
+    case "popup_failed_to_open":
+      return new GoogleAuthError(
+        "popup-blocked",
+        "Браузер заблокировал окно входа — разрешите всплывающие окна для этого сайта.",
+      );
+    case "access_denied":
+    case "consent_required":
+    case "interaction_required":
+      return new GoogleAuthError(
+        "access-denied",
+        "Google не выдал доступ. Причины: вы закрыли согласие или приложение не прошло проверку Google (для внешних пользователей нужен режим Testing + добавленный тестовый пользователь).",
+      );
+    default:
+      return new GoogleAuthError("unknown", `Ошибка Google: ${type ?? "unknown"}`);
+  }
+}
+
+function requestToken(prompt: "" | "none" | "select_account"): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    const oauth2 = window.google?.accounts?.oauth2;
+    if (!oauth2) {
+      reject(new GoogleAuthError("script-failed", "Google Identity Services не загрузился."));
+      return;
+    }
+
+    const client = oauth2.initTokenClient({
+      client_id: GOOGLE_CLIENT_ID,
+      scope: GOOGLE_SCOPE,
+      prompt,
+      callback: (response) => {
+        if (response.error || !response.access_token) {
+          reject(translateError(response.error ?? response.error_description));
+          return;
         }
-        resolve(resp.access_token);
+        const lifetimeSeconds = Number(response.expires_in ?? 3600);
+        token = {
+          value: response.access_token,
+          expiresAt: Date.now() + Math.max(lifetimeSeconds - 60, 30) * 1000,
+        };
+        persistToken();
+        resolve(response.access_token);
       },
-      error_callback: (err: any) => reject(new Error(err?.type ?? "auth error")),
+      error_callback: (error) => reject(translateError(error?.type)),
     });
+
     client.requestAccessToken();
   });
+}
+
+
+async function fetchProfile(): Promise<GoogleProfile> {
+  if (!token?.value) throw new GoogleAuthError("expired", "Нет активного токена Google.");
+
+  const response = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+    headers: { Authorization: `Bearer ${token.value}` },
+    cache: "no-store",
+  });
+
+  if (response.status === 401) {
+    clearToken();
+    throw new GoogleAuthError("expired", "Токен Google больше не действует — войдите заново.");
+  }
+  if (!response.ok) {
+    throw new GoogleAuthError("unknown", `Google не отдал профиль (HTTP ${response.status}).`);
+  }
+
+  const json = (await response.json()) as { email?: string; name?: string; picture?: string };
+  profile = {
+    email: json.email ?? null,
+    name: json.name ?? null,
+    picture: json.picture ?? null,
+  };
+  persistProfile();
+  return profile;
+}
+
+export async function signIn(): Promise<GoogleProfile> {
+  assertConfigured();
+  await loadScript();
+  await requestToken("select_account");
+  return fetchProfile();
+}
+
+export async function signInSilently(): Promise<GoogleProfile> {
+  assertConfigured();
+  await loadScript();
+  await requestToken("none");
+  return fetchProfile();
+}
+
+export async function loadProfile(): Promise<GoogleProfile> {
+  restore();
+  if (!token?.value) {
+    throw new GoogleAuthError("expired", "Нет активной сессии Google.");
+  }
+  return fetchProfile();
 }
 
 export async function getToken(): Promise<string> {
   restore();
   if (token && Date.now() < token.expiresAt) return token.value;
-  return signIn();
+  throw new GoogleAuthError(
+    "expired",
+    "Сессия Google истекла (токен живёт около часа). Нажмите «Войти через Google» заново.",
+  );
 }
 
-export function getEmail(): string | null {
+export function clearToken(): void {
+  token = null;
+  if (!isBrowser) return;
+  try {
+    localStorage.removeItem(TOKEN_KEY);
+  } catch {
+  }
+}
+
+export function getStoredProfile(): GoogleProfile | null {
   restore();
-  return email;
+  return profile;
 }
 
-export function hasSignedInBefore(): boolean {
-  if (!isBrowser) return false;
-  try { return localStorage.getItem(FLAG) === "1"; } catch { return false; }
+export function hasStoredProfile(): boolean {
+  const stored = getStoredProfile();
+  return Boolean(stored?.email);
 }
 
-export function signOut(): void {
-  if (isBrowser && token && window.google?.accounts?.oauth2) {
-    window.google.accounts.oauth2.revoke(token.value, () => {});
+export function hasValidToken(): boolean {
+  restore();
+  return Boolean(token && Date.now() < token.expiresAt);
+}
+
+export function isGoogleAuthConfigured(): boolean {
+  return isGoogleConfigured();
+}
+
+export function signOut({ revokeToken = true }: { revokeToken?: boolean } = {}): void {
+  restore();
+  const accessToken = token?.value;
+  if (revokeToken && accessToken && isBrowser && window.google?.accounts?.oauth2) {
+    try {
+      window.google.accounts.oauth2.revoke(accessToken, () => {});
+    } catch {
+    }
   }
   token = null;
-  email = null;
-  if (isBrowser) {
-    try {
-      localStorage.removeItem(TOKEN_KEY);
-      localStorage.removeItem(EMAIL_KEY);
-      localStorage.removeItem(FLAG);
-    } catch {}
+  profile = null;
+  if (!isBrowser) return;
+  try {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(PROFILE_KEY);
+  } catch {
   }
 }
