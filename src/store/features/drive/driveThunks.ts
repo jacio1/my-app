@@ -11,7 +11,7 @@ import {
   signIn,
   signInSilently,
   signOut as googleSignOut,
-} from "@/lib/auth";
+} from "@/lib/old-auth";
 import {
   DriveError,
   forgetFileId,
@@ -39,7 +39,6 @@ const SAVE_DELAY_MS = 1500;
 
 type ThunkConfig = { state: RootState; dispatch: AppDispatch };
 
-
 function readCachedDiary(): DiaryData | null {
   if (typeof window === "undefined") return null;
   try {
@@ -54,24 +53,21 @@ function writeCachedDiary(data: DiaryData): void {
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem(CACHE_KEY, JSON.stringify(data));
-  } catch {
-  }
+  } catch {}
 }
 
 function markDirty(): void {
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem(DIRTY_KEY, "1");
-  } catch {
-  }
+  } catch {}
 }
 
 function clearDirty(): void {
   if (typeof window === "undefined") return;
   try {
     localStorage.removeItem(DIRTY_KEY);
-  } catch {
-  }
+  } catch {}
 }
 
 function isDirty(): boolean {
@@ -84,7 +80,8 @@ function isDirty(): boolean {
 }
 
 function messageOf(error: unknown): string {
-  if (error instanceof GoogleAuthError || error instanceof DriveError) return error.message;
+  if (error instanceof GoogleAuthError || error instanceof DriveError)
+    return error.message;
   return describeAuthError(error);
 }
 
@@ -155,7 +152,9 @@ export const autoConnect = createAsyncThunk<void, void, ThunkConfig>(
 
     dispatch(setStatus("loading"));
     try {
-      const profile = hasValidToken() ? await loadProfile() : await signInSilently();
+      const profile = hasValidToken()
+        ? await loadProfile()
+        : await signInSilently();
       dispatch(setProfile(profile));
       await pullOrPush(dispatch, getState);
       dispatch(setSessionActive(true));
@@ -236,7 +235,7 @@ export const scheduleSave = createAsyncThunk<void, void, ThunkConfig>(
     writeCachedDiary(state.data);
     markDirty();
 
-    if (state.status === "signed-out") return; 
+    if (state.status === "signed-out") return;
 
     if (saveTimer) clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
@@ -247,7 +246,10 @@ export const scheduleSave = createAsyncThunk<void, void, ThunkConfig>(
         dispatch(setStatus("saving"));
         dispatch(setError(null));
         try {
-          const fileId = await saveToDrive(normalizeDiary(current.data), current.fileId);
+          const fileId = await saveToDrive(
+            normalizeDiary(current.data),
+            current.fileId,
+          );
           dispatch(setFileId(fileId));
           dispatch(setSessionActive(true));
           clearDirty();

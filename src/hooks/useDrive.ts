@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect } from "react";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import { preloadGoogleAuth } from "@/lib/auth";
+import { preloadGoogleAuth } from "@/lib/old-auth";
 import {
   autoConnect,
   connectDrive,
@@ -12,7 +12,12 @@ import {
   syncNow,
 } from "@/store/features/drive/driveThunks";
 import { setData as setDataAction } from "@/store/features/drive/driveSlice";
-import { EMPTY_DIARY, normalizeDiary, type Day, type DiaryData } from "@/lib/types";
+import {
+  EMPTY_DIARY,
+  normalizeDiary,
+  type Day,
+  type DiaryData,
+} from "@/lib/types";
 
 export function useDrive() {
   const dispatch = useAppDispatch();
@@ -56,8 +61,14 @@ export function useDrive() {
     lastSyncedAt: drive.lastSyncedAt,
     setData,
     updateDays,
-    connect: () => dispatch(connectDrive()).unwrap().catch(() => undefined),
-    syncNow: () => dispatch(syncNow()).unwrap().catch(() => undefined),
+    connect: () =>
+      dispatch(connectDrive())
+        .unwrap()
+        .catch(() => undefined),
+    syncNow: () =>
+      dispatch(syncNow())
+        .unwrap()
+        .catch(() => undefined),
     signOut: () => dispatch(disconnectDrive()),
     hydrate: () => dispatch(hydrateFromCache()),
   };

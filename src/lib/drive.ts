@@ -1,7 +1,6 @@
 "use client";
 
-
-import { getToken, clearToken, GoogleAuthError } from "./auth";
+import { getToken, clearToken, GoogleAuthError } from "./old-auth";
 
 const FILE_NAME = "diary.json";
 const MIME_TYPE = "application/json";
@@ -41,8 +40,7 @@ export function forgetFileId(): void {
   if (typeof window === "undefined") return;
   try {
     localStorage.removeItem(FILE_ID_KEY);
-  } catch {
-  }
+  } catch {}
 }
 
 function rememberFileId(fileId: string | null): void {
@@ -52,11 +50,13 @@ function rememberFileId(fileId: string | null): void {
   try {
     if (fileId) localStorage.setItem(FILE_ID_KEY, fileId);
     else localStorage.removeItem(FILE_ID_KEY);
-  } catch {
-  }
+  } catch {}
 }
 
-async function authorizedFetch(url: string, init: RequestInit = {}): Promise<Response> {
+async function authorizedFetch(
+  url: string,
+  init: RequestInit = {},
+): Promise<Response> {
   const token = await getToken();
   const response = await fetch(url, {
     ...init,
@@ -65,18 +65,23 @@ async function authorizedFetch(url: string, init: RequestInit = {}): Promise<Res
 
   if (response.status === 401) {
     clearToken();
-    throw new GoogleAuthError("expired", "Google отклонил токен (401) — войдите заново.");
+    throw new GoogleAuthError(
+      "expired",
+      "Google отклонил токен (401) — войдите заново.",
+    );
   }
   return response;
 }
 
-async function driveFailure(response: Response, what: string): Promise<DriveError> {
+async function driveFailure(
+  response: Response,
+  what: string,
+): Promise<DriveError> {
   let detail = "";
   try {
     const json = (await response.json()) as { error?: { message?: string } };
     detail = json.error?.message ?? "";
-  } catch {
-  }
+  } catch {}
 
   const hint =
     response.status === 403
@@ -106,13 +111,17 @@ async function findFile(): Promise<{ id: string } | null> {
     "&spaces=drive&orderBy=modifiedTime desc&fields=files(id,name,modifiedTime)";
 
   const response = await authorizedFetch(url);
-  if (!response.ok) throw await driveFailure(response, "Не удалось найти diary.json");
+  if (!response.ok)
+    throw await driveFailure(response, "Не удалось найти diary.json");
 
   const json = (await response.json()) as { files?: { id: string }[] };
   return json.files?.[0] ? { id: json.files[0].id } : null;
 }
 
-export async function loadFromDrive(): Promise<{ fileId: string; data: unknown } | null> {
+export async function loadFromDrive(): Promise<{
+  fileId: string;
+  data: unknown;
+} | null> {
   const cachedId = getRememberedFileId();
 
   if (cachedId) {
@@ -122,8 +131,9 @@ export async function loadFromDrive(): Promise<{ fileId: string; data: unknown }
     if (response.ok) {
       return { fileId: cachedId, data: await parseJson(response) };
     }
-    if (response.status !== 404) throw await driveFailure(response, "Не удалось скачать diary.json");
-    forgetFileId(); 
+    if (response.status !== 404)
+      throw await driveFailure(response, "Не удалось скачать diary.json");
+    forgetFileId();
   }
 
   const found = await findFile();
@@ -132,7 +142,8 @@ export async function loadFromDrive(): Promise<{ fileId: string; data: unknown }
   const response = await authorizedFetch(
     `https://www.googleapis.com/drive/v3/files/${found.id}?alt=media`,
   );
-  if (!response.ok) throw await driveFailure(response, "Не удалось скачать diary.json");
+  if (!response.ok)
+    throw await driveFailure(response, "Не удалось скачать diary.json");
 
   rememberFileId(found.id);
   return { fileId: found.id, data: await parseJson(response) };
@@ -140,7 +151,7 @@ export async function loadFromDrive(): Promise<{ fileId: string; data: unknown }
 
 async function parseJson(response: Response): Promise<unknown> {
   const text = await response.text();
-  if (!text.trim()) return null; 
+  if (!text.trim()) return null;
   try {
     return JSON.parse(text) as unknown;
   } catch {
@@ -148,7 +159,10 @@ async function parseJson(response: Response): Promise<unknown> {
   }
 }
 
-export async function saveToDrive(data: unknown, fileId: string | null): Promise<string> {
+export async function saveToDrive(
+  data: unknown,
+  fileId: string | null,
+): Promise<string> {
   const payload = JSON.stringify(data, null, 2);
 
   if (!fileId) {
@@ -173,7 +187,8 @@ export async function saveToDrive(data: unknown, fileId: string | null): Promise
         body,
       },
     );
-    if (!response.ok) throw await driveFailure(response, "Не удалось создать diary.json");
+    if (!response.ok)
+      throw await driveFailure(response, "Не удалось создать diary.json");
 
     const json = (await response.json()) as { id: string };
     rememberFileId(json.id);
@@ -193,7 +208,8 @@ export async function saveToDrive(data: unknown, fileId: string | null): Promise
     forgetFileId();
     return saveToDrive(data, null);
   }
-  if (!response.ok) throw await driveFailure(response, "Не удалось обновить diary.json");
+  if (!response.ok)
+    throw await driveFailure(response, "Не удалось обновить diary.json");
 
   rememberFileId(fileId);
   return fileId;
