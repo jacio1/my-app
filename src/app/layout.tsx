@@ -4,7 +4,6 @@ import "./globals.css";
 import { cn } from "@/lib/utils";
 import MobileBottomNav from "@/components/MobileBottomNav";
 import StoreProvider from "@/store/providers";
-import { SessionProvider } from "next-auth/react";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
