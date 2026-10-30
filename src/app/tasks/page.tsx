@@ -3,26 +3,42 @@
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { addTask, toggleTask } from "@/store/features/tasks/tasksSlice";
+import {
+  addTaskToFirestore,
+  toggleTaskInFirestore,
+  fetchTasks,
+} from "@/store/features/tasks/tasksSlice";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import clsx from "clsx";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export default function TasksPage() {
   const [title, setTitle] = useState("");
   const tasks = useAppSelector((state) => state.tasks.items);
+  const loading = useAppSelector((state) => state.tasks.loading);
   const dispatch = useAppDispatch();
 
-  const handleAdd = () => {
+  // Запускаем слушатель Firestore при монтировании
+  useEffect(() => {
+    dispatch(fetchTasks());
+  }, [dispatch]);
+
+  const handleAdd = async () => {
     if (!title.trim()) return;
-    dispatch(addTask(title));
+    await dispatch(addTaskToFirestore(title));
     setTitle("");
   };
+
+  const handleToggle = async (id: string, completed: boolean) => {
+    await dispatch(toggleTaskInFirestore({ id, completed }));
+  };
+
+  if (loading) return <div className="container mx-auto pt-16">Загрузка...</div>;
 
   return (
     <div className="container mx-auto pt-16">
       <h1>Страница задач</h1>
-      <div className=" m-5 bg-secondary rounded-2xl p-4">
+      <div className="m-5 bg-secondary rounded-2xl p-4">
         <Input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
@@ -38,18 +54,14 @@ export default function TasksPage() {
                 key={task.id}
                 className={clsx(
                   "flex items-center gap-4 rounded-2xl h-16",
-                  task.completed ? "bg-card line-through" : "bg-black",
+                  task.completed ? "bg-card line-through" : "bg-black"
                 )}
               >
-                <label
-                  className={clsx(
-                    "flex items-center gap-4 w-full h-full cursor-pointer px-4",
-                  )}
-                  onClick={() => dispatch(toggleTask(task.id))}
-                >
+                <label className="flex items-center gap-4 w-full h-full cursor-pointer px-4">
                   <Checkbox
                     className="rounded-xl bg-accent"
                     checked={task.completed}
+                    onCheckedChange={() => handleToggle(task.id, task.completed)}
                   />
                   <h1>{task.title}</h1>
                 </label>
