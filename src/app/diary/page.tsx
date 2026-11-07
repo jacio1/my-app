@@ -6,14 +6,22 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
-import { Trash2, BookOpen } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Trash2, BookOpen, Plus } from "lucide-react";
 
 type DiaryNote = {
   id: string;
   title: string;
   dayDescription: string;
-  createdAt: string; 
+  createdAt: string;
 };
 
 const STORAGE_KEY = "diary-notes";
@@ -23,6 +31,7 @@ export default function DiaryPage() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [loaded, setLoaded] = useState(false);
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     try {
@@ -40,6 +49,11 @@ export default function DiaryPage() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(notes));
   }, [notes, loaded]);
 
+  const resetForm = () => {
+    setTitle("");
+    setDescription("");
+  };
+
   const handleAdd = () => {
     const trimmed = description.trim();
     if (!trimmed) return;
@@ -52,8 +66,13 @@ export default function DiaryPage() {
     };
 
     setNotes((prev) => [newNote, ...prev]);
-    setTitle("");
-    setDescription("");
+    resetForm();
+    setOpen(false);
+  };
+
+  const handleOpenChange = (next: boolean) => {
+    setOpen(next);
+    if (!next) resetForm();
   };
 
   const handleDelete = (id: string) => {
@@ -71,44 +90,64 @@ export default function DiaryPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
-      <div className="mb-6 flex items-center gap-2">
-        <BookOpen className="h-6 w-6" />
-        <h1 className="text-3xl font-bold tracking-tight">Дневник</h1>
-      </div>
+      <div className="mb-6 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <BookOpen className="h-6 w-6" />
+          <h1 className="text-3xl font-bold tracking-tight">Дневник</h1>
+        </div>
 
-      <Card className="mb-8">
-        <CardHeader>
-          <CardTitle>Новая запись</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="title">Заголовок</Label>
-            <Input
-              id="title"
-              placeholder="Например: день изучения React"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="description">Что произошло за день</Label>
-            <Textarea
-              id="description"
-              placeholder="Что изучил, что запомнилось, о чём думал..."
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={6}
-            />
-          </div>
-
-          <div className="flex justify-end">
-            <Button onClick={handleAdd} disabled={!description.trim()}>
-              Сохранить запись
+        <Dialog open={open} onOpenChange={handleOpenChange}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
+              Новая запись
             </Button>
-          </div>
-        </CardContent>
-      </Card>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Новая запись</DialogTitle>
+              <DialogDescription>
+                Опишите, что произошло за день.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-2">
+              <div className="space-y-2">
+                <Label htmlFor="title">Заголовок</Label>
+                <Input
+                  id="title"
+                  placeholder="Например: день изучения React"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="description">Что произошло за день</Label>
+                <Textarea
+                  id="description"
+                  placeholder="Что изучил, что запомнилось, о чём думал..."
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  rows={6}
+                />
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => handleOpenChange(false)}
+              >
+                Отмена
+              </Button>
+              <Button onClick={handleAdd} disabled={!description.trim()}>
+                Сохранить запись
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
 
       <div className="space-y-4">
         <h2 className="text-xl font-semibold">
@@ -118,7 +157,7 @@ export default function DiaryPage() {
         {notes.length === 0 ? (
           <Card>
             <CardContent className="py-10 text-center text-muted-foreground">
-              Пока нет записей. 
+              Пока нет записей.
             </CardContent>
           </Card>
         ) : (
