@@ -1,75 +1,86 @@
 "use client";
 
+import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import {
-  addTaskToFirestore,
-  toggleTaskInFirestore,
-  fetchTasks,
-} from "@/store/features/tasks/tasksSlice";
-import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import clsx from "clsx";
-import { useState, useEffect } from "react";
+import { StorageStatus, useLocalData } from "@/hooks/use-local-data";
+import { newRecord, type Task } from "@/lib/local-data";
+
+const filters = [
+  { value: "active", label: "Активные" },
+  { value: "completed", label: "Выполненные" },
+  { value: "all", label: "Все" },
+] as const;
 
 export default function TasksPage() {
+  const { snapshot, loaded, commit, error } = useLocalData();
   const [title, setTitle] = useState("");
-  const tasks = useAppSelector((state) => state.tasks.items);
-  const loading = useAppSelector((state) => state.tasks.loading);
-  const dispatch = useAppDispatch();
+  const [editing, setEditing] = useState<string | null>(null);
+  const [filter, setFilter] = useState<(typeof filters)[number]["value"]>("active");
 
-  // Запускаем слушатель Firestore при монтировании
-  useEffect(() => {
-    dispatch(fetchTasks());
-  }, [dispatch]);
+  function updateTask(id: string, patch: Partial<Pick<Task, "title" | "completed">>) {
+    return commit((current) => ({
+      ...current,
+      tasks: current.tasks.map((task) => task.id === id
+        ? { ...task, ...patch, updatedAt: new Date().toISOString() }
+        : task),
+    }));
+  }
 
-  const handleAdd = async () => {
-    if (!title.trim()) return;
-    await dispatch(addTaskToFirestore(title));
-    setTitle("");
-  };
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const trimmed = title.trim();
+    if (!trimmed) return;
+    const saved = editing
+      ? updateTask(editing, { title: trimmed })
+      : commit((current) => ({
+        ...current, tasks: [{ ...newRecord(trimmed), completed: false }, ...current.tasks],
+      }));
+    if (saved) {
+      if (!editing && filter === "completed") setFilter("active");
+      setTitle("");
+      setEditing(null);
+    }
+  }
 
-  const handleToggle = async (id: string, completed: boolean) => {
-    await dispatch(toggleTaskInFirestore({ id, completed }));
-  };
-
-  if (loading) return <div className="container mx-auto pt-16">Загрузка...</div>;
+  const tasks = snapshot?.tasks.filter((task) => filter === "all" || task.completed === (filter === "completed"));
 
   return (
-    <div className="container mx-auto pt-16">
-      <h1>Страница задач</h1>
-      <div className="m-5 bg-secondary rounded-2xl p-4">
-        <Input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="Введите название задачи..."
-          autoComplete="off"
-        />
-        <Button onClick={handleAdd}>Добавить задачу</Button>
-        <div className="mt-8">
-          <h1 className="mb-4">Количество задач: {tasks.length}</h1>
-          <ul className="flex flex-col gap-2">
-            {tasks.map((task) => (
-              <li
-                key={task.id}
-                className={clsx(
-                  "flex items-center gap-4 rounded-2xl h-16",
-                  task.completed ? "bg-card line-through" : "bg-black"
-                )}
-              >
-                <label className="flex items-center gap-4 w-full h-full cursor-pointer px-4">
-                  <Checkbox
-                    className="rounded-xl bg-accent"
-                    checked={task.completed}
-                    onCheckedChange={() => handleToggle(task.id, task.completed)}
-                  />
-                  <h1>{task.title}</h1>
-                </label>
-              </li>
-            ))}
-          </ul>
+    <section className="space-y-5">
+      <h1 className="text-3xl font-bold">Задачи</h1>
+      {!snapshot ? <StorageStatus loaded={loaded} /> : <>
+        {error && <p role="alert" className="text-destructive">{error}</p>}
+        <form onSubmit={submit} className="flex flex-wrap items-end gap-2">
+          <label className="grid min-w-40 flex-1 gap-2">
+            {editing ? "Переименовать задачу" : "Новая задача"}
+            <Input required value={title} onChange={(event) => setTitle(event.target.value)} />
+          </label>
+          <Button type="submit" disabled={!title.trim()}>{editing ? "Сохранить" : "Добавить"}</Button>
+          {editing && <Button type="button" variant="outline" onClick={() => { setEditing(null); setTitle(""); }}>Отмена</Button>}
+        </form>
+        <div role="group" aria-label="Фильтр задач" className="flex flex-wrap gap-2">
+          {filters.map(({ value, label }) => (
+            <Button key={value} variant={filter === value ? "default" : "outline"} aria-pressed={filter === value} onClick={() => setFilter(value)}>{label}</Button>
+          ))}
         </div>
-      </div>
-    </div>
+        {tasks?.length === 0 && <p className="text-muted-foreground">В этом списке пока нет задач.</p>}
+        <ul className="space-y-2">
+          {tasks?.map((task) => (
+            <li key={task.id} className="flex flex-wrap items-center gap-2 rounded-lg border p-3">
+              <label className="flex min-w-0 flex-1 items-center gap-3 break-all">
+                <input type="checkbox" checked={task.completed} onChange={() => updateTask(task.id, { completed: !task.completed })} />
+                <span className={task.completed ? "text-muted-foreground line-through" : undefined}>{task.title}</span>
+              </label>
+              <Button size="sm" variant="outline" disabled={!!editing || !!title} onClick={() => { setEditing(task.id); setTitle(task.title); }}>Переименовать</Button>
+              <Button size="sm" variant="ghost" disabled={editing === task.id} onClick={() => {
+                if (window.confirm(`Удалить «${task.title}»?`)) {
+                  commit((current) => ({ ...current, tasks: current.tasks.filter(({ id }) => id !== task.id) }));
+                }
+              }}>Удалить</Button>
+            </li>
+          ))}
+        </ul>
+      </>}
+    </section>
   );
 }
