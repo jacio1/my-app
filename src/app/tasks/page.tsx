@@ -1,9 +1,12 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, Suspense, type FormEvent } from "react";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StorageStatus, useLocalData } from "@/hooks/use-local-data";
+import { PageHeader, EmptyState, EditorDialog, DeleteDialog } from "@/components/workspace-ui";
+import { DialogFooter } from "@/components/ui/dialog";
 import { newRecord, type Task } from "@/lib/local-data";
 
 const filters = [
@@ -13,7 +16,15 @@ const filters = [
 ] as const;
 
 export default function TasksPage() {
+  return <Suspense fallback={<StorageStatus loaded={false} />}><Tasks /></Suspense>;
+}
+
+function Tasks() {
+  const params = useSearchParams();
   const { snapshot, loaded, commit, error } = useLocalData();
+  const [open, setOpen] = useState(params.get("new") === "1");
+  const [query, setQuery] = useState("");
+  const [deleting, setDeleting] = useState<Task | null>(null);
   const [title, setTitle] = useState("");
   const [editing, setEditing] = useState<string | null>(null);
   const [filter, setFilter] = useState<(typeof filters)[number]["value"]>("active");
@@ -38,45 +49,47 @@ export default function TasksPage() {
       }));
     if (saved) {
       if (!editing && filter === "completed") setFilter("active");
+      setOpen(false);
       setTitle("");
       setEditing(null);
     }
   }
 
-  const tasks = snapshot?.tasks.filter((task) => filter === "all" || task.completed === (filter === "completed"));
+  const tasks = snapshot?.tasks.filter((task) => (filter === "all" || task.completed === (filter === "completed")) && task.title.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
 
   return (
     <section className="space-y-5">
-      <h1 className="text-3xl font-bold">Задачи</h1>
+      <PageHeader title="Задачи" description="Освободите голову и сосредоточьтесь на следующем шаге." action={snapshot ? "Новая задача" : undefined} onCreate={() => { setTitle(""); setEditing(null); setOpen(true); }} />
       {!snapshot ? <StorageStatus loaded={loaded} /> : <>
         {error && <p role="alert" className="text-destructive">{error}</p>}
-        <form onSubmit={submit} className="flex flex-wrap items-end gap-2">
+        <EditorDialog open={open} title={editing ? "Редактировать задачу" : "Новая задача"} description="Один небольшой шаг к вашим целям." onClose={() => setOpen(false)}>
+        <form onSubmit={submit} className="grid gap-5">
           <label className="grid min-w-40 flex-1 gap-2">
             {editing ? "Переименовать задачу" : "Новая задача"}
-            <Input required value={title} onChange={(event) => setTitle(event.target.value)} />
+            <Input autoFocus required value={title} onChange={(event) => setTitle(event.target.value)} />
           </label>
-          <Button type="submit" disabled={!title.trim()}>{editing ? "Сохранить" : "Добавить"}</Button>
-          {editing && <Button type="button" variant="outline" onClick={() => { setEditing(null); setTitle(""); }}>Отмена</Button>}
+          <DialogFooter><Button type="submit" disabled={!title.trim()}>{editing ? "Сохранить" : "Добавить"}</Button>
+          <Button type="button" variant="outline" onClick={() => setOpen(false)}>Отмена</Button></DialogFooter>
+          {error && <p role="alert" className="text-destructive">{error}</p>}
         </form>
+        </EditorDialog>
+        <DeleteDialog title={deleting?.title ?? null} error={error} onClose={() => setDeleting(null)} onDelete={() => { if (deleting && commit((current) => ({ ...current, tasks: current.tasks.filter(({ id }) => id !== deleting.id) }))) setDeleting(null); }} />
+        <Input type="search" aria-label="Поиск задач" placeholder="Найти задачу…" value={query} onChange={(event) => setQuery(event.target.value)} />
         <div role="group" aria-label="Фильтр задач" className="flex flex-wrap gap-2">
           {filters.map(({ value, label }) => (
-            <Button key={value} variant={filter === value ? "default" : "outline"} aria-pressed={filter === value} onClick={() => setFilter(value)}>{label}</Button>
+            <Button key={value} variant={filter === value ? "default" : "outline"} aria-pressed={filter === value} onClick={() => setFilter(value)}>{label} · {snapshot.tasks.filter((task) => value === "all" || task.completed === (value === "completed")).length}</Button>
           ))}
         </div>
-        {tasks?.length === 0 && <p className="text-muted-foreground">В этом списке пока нет задач.</p>}
+        {tasks?.length === 0 && <EmptyState>{query.trim() ? "Ничего не найдено. Попробуйте другой запрос." : "В этом списке пока нет задач. Можно выдохнуть или наметить новый шаг."}</EmptyState>}
         <ul className="space-y-2">
           {tasks?.map((task) => (
-            <li key={task.id} className="flex flex-wrap items-center gap-2 rounded-lg border p-3">
-              <label className="flex min-w-0 flex-1 items-center gap-3 break-all">
-                <input type="checkbox" checked={task.completed} onChange={() => updateTask(task.id, { completed: !task.completed })} />
+            <li key={task.id} className="flex flex-wrap items-center gap-2 rounded-2xl border bg-card p-4">
+              <label className="flex min-w-0 flex-1 items-center gap-3 break-words">
+                <input className="size-5 shrink-0 accent-primary" type="checkbox" checked={task.completed} onChange={() => updateTask(task.id, { completed: !task.completed })} />
                 <span className={task.completed ? "text-muted-foreground line-through" : undefined}>{task.title}</span>
               </label>
-              <Button size="sm" variant="outline" disabled={!!editing || !!title} onClick={() => { setEditing(task.id); setTitle(task.title); }}>Переименовать</Button>
-              <Button size="sm" variant="ghost" disabled={editing === task.id} onClick={() => {
-                if (window.confirm(`Удалить «${task.title}»?`)) {
-                  commit((current) => ({ ...current, tasks: current.tasks.filter(({ id }) => id !== task.id) }));
-                }
-              }}>Удалить</Button>
+              <Button size="sm" variant="outline" onClick={() => { setEditing(task.id); setTitle(task.title); setOpen(true); }}>Переименовать</Button>
+              <Button size="sm" variant="ghost" onClick={() => setDeleting(task)}>Удалить</Button>
             </li>
           ))}
         </ul>

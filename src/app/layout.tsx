@@ -22,7 +22,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <div className="flex min-h-0 flex-1">
             <Navigation />
             <main className="min-w-0 flex-1 overflow-y-auto">
-              <div className="mx-auto max-w-4xl px-4 py-6 md:px-8">{children}</div>
+              <div className="mx-auto max-w-5xl px-4 py-6 md:px-10 md:py-10">{children}</div>
             </main>
           </div>
           <Navigation mobile />
