@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpen, Home, ListTodo, NotebookPen } from "lucide-react";
+import { BookOpen, Home, ListTodo, NotebookPen, UserCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const items = [
@@ -10,6 +10,7 @@ const items = [
   { href: "/tasks", label: "Задачи", icon: ListTodo },
   { href: "/notes", label: "Заметки", icon: NotebookPen },
   { href: "/diary", label: "Дневник", icon: BookOpen },
+  { href: "/profile", label: "Профиль", icon: UserCircle },
 ];
 
 export function Navigation({ mobile = false }: { mobile?: boolean }) {
