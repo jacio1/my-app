@@ -38,7 +38,7 @@ export default function Home() {
     try {
       setPending(parseSnapshot(await file.text()));
     } catch {
-      setFileError("Не удалось прочитать копию. Выберите корректный JSON-файл версии 1.");
+      setFileError("Не удалось прочитать копию. Выберите корректный JSON-файл версии 1 или 2.");
     } finally {
       setReading(false);
     }
@@ -58,6 +58,8 @@ export default function Home() {
           <Link className="rounded-xl border bg-card px-4 py-3 text-sm font-medium transition-colors hover:border-primary hover:bg-muted" href="/tasks?new=1">Добавить задачу</Link>
           <Link className="rounded-lg border px-3 py-2 hover:bg-muted" href="/notes?new=1">Новая заметка</Link>
           <Link className="rounded-lg border px-3 py-2 hover:bg-muted" href="/diary?new=1">Новая запись</Link>
+          <Link className="rounded-xl border bg-card px-4 py-3 text-sm font-medium" href="/plans?new=1">Новый план</Link>
+          <Link className="rounded-xl border bg-card px-4 py-3 text-sm font-medium" href="/goals?new=1">Новая цель</Link>
         </div>
         <div className="grid grid-cols-3 gap-3">{[{ label: "Активных задач", count: snapshot.tasks.filter((task) => !task.completed).length, href: "/tasks" }, { label: "Заметок", count: snapshot.notes.length, href: "/notes" }, { label: "Записей дневника", count: snapshot.diary.length, href: "/diary" }].map((item) => <Link key={item.href} href={item.href} className="rounded-2xl border bg-card p-4 transition-colors hover:border-primary"><p className="text-3xl font-semibold text-primary">{item.count}</p><p className="mt-2 text-xs text-muted-foreground sm:text-sm">{item.label}</p></Link>)}</div>
         <div className="grid gap-4 sm:grid-cols-2">
@@ -77,7 +79,7 @@ export default function Home() {
         </div>
         <section className="space-y-3 rounded-2xl border bg-card p-5">
           <h2 className="text-lg font-semibold">Резервная копия</h2>
-          <p className="text-sm text-muted-foreground">Данные хранятся в этом браузере. JSON-файл содержит все три раздела и подходит для переноса на другое устройство.</p>
+          <p className="text-sm text-muted-foreground">Скачайте все разделы одним JSON-файлом. Импорт заменит данные текущего режима: локальные записи или записи аккаунта, если вы вошли.</p>
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={exportData}>Скачать JSON</Button>
             <Button variant="outline" disabled={reading} onClick={() => fileInput.current?.click()}>Выбрать JSON</Button>
@@ -86,10 +88,10 @@ export default function Home() {
           {fileError && <p role="alert">{fileError}</p>}
           {error && <p role="alert">{error}</p>}
           {message && <p role="status">{message}</p>}
-          <EditorDialog open={!!pending} title="Восстановить резервную копию?" description="Импорт полностью заменит данные в этом браузере. Сначала скачайте текущую копию, если хотите её сохранить." onClose={() => setPending(null)}>{pending && (
+          <EditorDialog open={!!pending} title="Восстановить резервную копию?" description="Импорт полностью заменит данные текущего режима, включая облако, если вы вошли. Сначала скачайте текущую копию, если хотите её сохранить." onClose={() => setPending(null)}>{pending && (
             <div className="space-y-4">
               {error && <p role="alert" className="text-destructive">{error}</p>}
-              <p>В копии {pending.tasks.length} задач, {pending.notes.length} заметок и {pending.diary.length} записей дневника. Импорт заменит текущие данные.</p>
+              <p>В копии {pending.tasks.length} задач, {pending.notes.length} заметок и {pending.diary.length} записей дневника, {pending.plans.length} планов и {pending.goals.length} целей. Импорт заменит текущие данные.</p>
               <div className="flex flex-wrap gap-2">
                 <Button onClick={() => {
                   if (commit(() => pending)) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, Suspense, type FormEvent } from "react";
+import { useState, useEffect, Suspense, type FormEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +21,13 @@ export default function TasksPage() {
 
 function Tasks() {
   const params = useSearchParams();
+  useEffect(() => {
+    if (params.get("new") === "1") {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("new");
+      window.history.replaceState(null, "", url);
+    }
+  }, [params]);
   const { snapshot, loaded, commit, error } = useLocalData();
   const [open, setOpen] = useState(params.get("new") === "1");
   const [query, setQuery] = useState("");
@@ -66,7 +73,7 @@ function Tasks() {
         <form onSubmit={submit} className="grid gap-5">
           <label className="grid min-w-40 flex-1 gap-2">
             {editing ? "Переименовать задачу" : "Новая задача"}
-            <Input autoFocus required value={title} onChange={(event) => setTitle(event.target.value)} />
+            <Input autoFocus required maxLength={500} value={title} onChange={(event) => setTitle(event.target.value)} />
           </label>
           <DialogFooter><Button type="submit" disabled={!title.trim()}>{editing ? "Сохранить" : "Добавить"}</Button>
           <Button type="button" variant="outline" onClick={() => setOpen(false)}>Отмена</Button></DialogFooter>

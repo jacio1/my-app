@@ -1,0 +1,29 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function owner(uid) { return request.auth != null && request.auth.uid == uid; }
+    function validRecord(data) {
+      return data.keys().hasAll(['id', 'section', 'title', 'createdAt', 'updatedAt', 'deleted'])
+        && data.keys().hasOnly(['id', 'section', 'title', 'createdAt', 'updatedAt', 'deleted', 'text', 'date', 'completed'])
+        && data.id is string && data.id.size() > 0 && data.id.size() <= 128
+        && data.title is string && data.title.size() > 0 && data.title.size() <= 500
+        && data.section in ['tasks', 'notes', 'diary', 'plans', 'goals']
+        && data.createdAt is string && data.updatedAt is string && data.deleted is bool
+        && (data.section == 'tasks' || (data.text is string && data.text.size() <= 100000))
+        && (!(data.section in ['tasks', 'goals']) || data.completed is bool)
+        && (data.section != 'plans' || (data.date is string && (data.date == '' || data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$'))));
+    }
+    match /users/{uid}/records/{recordId} {
+      allow read: if owner(uid);
+      allow create: if owner(uid) && validRecord(request.resource.data);
+      allow update: if owner(uid) && validRecord(request.resource.data)
+        && request.resource.data.id == resource.data.id
+        && request.resource.data.section == resource.data.section
+        && request.resource.data.createdAt == resource.data.createdAt;
+      // Soft deletion is synchronized as an update, keeping offline devices consistent.
+      allow delete: if false;
+    }
+    // OAuth credentials and token hashes are accessible exclusively by the server.
+    match /{document=**} { allow read, write: if false; }
+  }
+}
