@@ -2,6 +2,7 @@
 
 import { Fragment, createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut, type User } from "firebase/auth";
+import { FirebaseError } from "firebase/app";
 import { collection, doc, onSnapshot, writeBatch } from "firebase/firestore";
 import { cloudConfigured, firebaseClient } from "@/lib/firebase-client";
 import { changedRecords, loadSnapshot, mergeRecovery, parseSnapshot, recordDocumentId, saveSnapshot, sections, type Snapshot, type Section, type RecordFields } from "@/lib/local-data";
@@ -168,7 +169,22 @@ export function CloudProvider({ children }: { children: React.ReactNode }) {
     setError("");
     if (!cloudConfigured) { setError("Для входа настройте Firebase. Инструкция находится в README проекта."); return; }
     try { await signInWithPopup(firebaseClient().auth, new GoogleAuthProvider()); }
-    catch { setError("Вход не завершён. Разрешите всплывающее окно, включите Google в Firebase Authentication и проверьте разрешённый домен."); }
+    catch (failure) {
+      const code = failure instanceof FirebaseError ? failure.code : "unknown";
+      switch (code) {
+        case "auth/popup-blocked":
+          setError("Браузер заблокировал окно входа. Разрешите всплывающие окна для дневника или откройте сайт в обычной вкладке браузера.");
+          break;
+        case "auth/popup-closed-by-user":
+          setError("Окно Google закрылось до завершения входа. Повторите вход и выберите аккаунт в открывшемся окне.");
+          break;
+        case "auth/network-request-failed":
+          setError("Не удалось связаться с Google или Firebase. Проверьте подключение и повторите вход.");
+          break;
+        default:
+          setError(`Вход через Google не завершён. Код ошибки: ${code}.`);
+      }
+    }
   }
   async function logout() {
     if (hasPending.current) { setError("Сначала дождитесь синхронизации изменений и подключения к интернету."); return; }
