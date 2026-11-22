@@ -24,6 +24,10 @@ export function TaskCard({ task, onComplete, onSubtasksChange, onRename, onDelet
   const subtasks = task.subtasks ?? [];
   const done = subtasks.filter((item) => item.completed).length;
 
+  function setSubtaskCompleted(id: string, completed: boolean) {
+    onSubtasksChange((current) => current.map((item) => item.id === id ? { ...item, completed } : item));
+  }
+
   function addSubtask(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const title = draft.trim();
@@ -66,12 +70,21 @@ export function TaskCard({ task, onComplete, onSubtasksChange, onRename, onDelet
               <progress aria-label="Прогресс подзадач" className="block h-1 w-full accent-primary" value={done} max={subtasks.length} />
               <ul className="divide-y divide-border/60">
                 {subtasks.map((item) => (
-                  <li key={item.id} className="flex items-center gap-3 py-1">
+                  <li
+                    key={item.id}
+                    className="flex items-center gap-3 rounded-lg py-1 hover:bg-muted/40"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      if (!(event.target instanceof Element) || event.target.closest("button, input, [role='checkbox']")) return;
+                      if (window.getSelection()?.type === "Range") return;
+                      setSubtaskCompleted(item.id, !item.completed);
+                    }}
+                  >
                     <Checkbox
                       checked={item.completed}
                       aria-label={item.title}
                       className="size-11 rounded-xl after:inset-0"
-                      onCheckedChange={(completed) => onSubtasksChange((current) => current.map((subtask) => subtask.id === item.id ? { ...subtask, completed } : subtask))}
+                      onCheckedChange={(completed) => setSubtaskCompleted(item.id, completed)}
                     />
                     <span className={cn("min-w-0 flex-1 text-sm [overflow-wrap:anywhere]", item.completed && "text-muted-foreground line-through")}>{item.title}</span>
                     <Button size="icon" variant="ghost" aria-label={`Удалить подзадачу: ${item.title}`} onClick={() => onSubtasksChange((current) => current.filter((subtask) => subtask.id !== item.id))}><X /></Button>

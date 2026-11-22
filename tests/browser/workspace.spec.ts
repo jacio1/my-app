@@ -9,6 +9,10 @@ test("completed tasks stay crossed out until leaving the page and keep their sub
   await page.getByRole("textbox", { name: "Название подзадачи" }).fill("Взять зарядку");
   await page.getByRole("button", { name: "Добавить", exact: true }).click();
   await page.getByRole("checkbox", { name: "Взять зарядку" }).click();
+  await page.getByText("Взять зарядку", { exact: true }).click();
+  await expect(page.getByRole("checkbox", { name: "Взять зарядку" })).not.toBeChecked();
+  await page.getByText("Взять зарядку", { exact: true }).click();
+  await expect(page.getByRole("checkbox", { name: "Взять зарядку" })).toBeChecked();
   await expect(page.getByRole("checkbox", { name: "Собрать вещи" })).not.toBeChecked();
   await page.getByRole("heading", { name: "Собрать вещи" }).click();
   await expect(page.getByRole("heading", { name: "Собрать вещи" })).toHaveCSS("text-decoration-line", "line-through");
