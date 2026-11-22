@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useEffect, Suspense, type FormEvent } from "react";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StorageStatus, useLocalData } from "@/hooks/use-local-data";
 import { PageHeader, EmptyState, EditorDialog, DeleteDialog } from "@/components/workspace-ui";
 import { DialogFooter } from "@/components/ui/dialog";
+import { TaskCard } from "@/components/task-card";
 import { newRecord, type Task } from "@/lib/local-data";
 
 const filters = [
@@ -16,7 +17,12 @@ const filters = [
 ] as const;
 
 export default function TasksPage() {
-  return <Suspense fallback={<StorageStatus loaded={false} />}><Tasks /></Suspense>;
+  return <Suspense fallback={<StorageStatus loaded={false} />}><TaskVisit /></Suspense>;
+}
+
+function TaskVisit() {
+  const pathname = usePathname();
+  return pathname === "/tasks" ? <Tasks /> : null;
 }
 
 function Tasks() {
@@ -36,11 +42,13 @@ function Tasks() {
   const [editing, setEditing] = useState<string | null>(null);
   const [filter, setFilter] = useState<(typeof filters)[number]["value"]>("active");
 
-  function updateTask(id: string, patch: Partial<Pick<Task, "title" | "completed">>) {
+  const [recentlyCompleted, setRecentlyCompleted] = useState<Set<string>>(() => new Set());
+
+  function updateTask(id: string, change: (task: Task) => Partial<Pick<Task, "title" | "completed" | "subtasks">>) {
     return commit((current) => ({
       ...current,
       tasks: current.tasks.map((task) => task.id === id
-        ? { ...task, ...patch, updatedAt: new Date().toISOString() }
+        ? { ...task, ...change(task), updatedAt: new Date().toISOString() }
         : task),
     }));
   }
@@ -50,7 +58,7 @@ function Tasks() {
     const trimmed = title.trim();
     if (!trimmed) return;
     const saved = editing
-      ? updateTask(editing, { title: trimmed })
+      ? updateTask(editing, () => ({ title: trimmed }))
       : commit((current) => ({
         ...current, tasks: [{ ...newRecord(trimmed), completed: false }, ...current.tasks],
       }));
@@ -62,7 +70,7 @@ function Tasks() {
     }
   }
 
-  const tasks = snapshot?.tasks.filter((task) => (filter === "all" || task.completed === (filter === "completed")) && task.title.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
+  const tasks = snapshot?.tasks.filter((task) => (filter === "all" || task.completed === (filter === "completed") || (filter === "active" && recentlyCompleted.has(task.id))) && task.title.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
 
   return (
     <section className="space-y-5">
@@ -90,13 +98,24 @@ function Tasks() {
         {tasks?.length === 0 && <EmptyState>{query.trim() ? "Ничего не найдено. Попробуйте другой запрос." : "В этом списке пока нет задач. Можно выдохнуть или наметить новый шаг."}</EmptyState>}
         <ul className="space-y-2">
           {tasks?.map((task) => (
-            <li key={task.id} className="flex flex-wrap items-center gap-2 rounded-2xl border bg-card p-4">
-              <label className="flex min-w-0 flex-1 items-center gap-3 break-words">
-                <input className="size-5 shrink-0 accent-primary" type="checkbox" checked={task.completed} onChange={() => updateTask(task.id, { completed: !task.completed })} />
-                <span className={task.completed ? "text-muted-foreground line-through" : undefined}>{task.title}</span>
-              </label>
-              <Button size="sm" variant="outline" onClick={() => { setEditing(task.id); setTitle(task.title); setOpen(true); }}>Переименовать</Button>
-              <Button size="sm" variant="ghost" onClick={() => setDeleting(task)}>Удалить</Button>
+            <li key={task.id}>
+              <TaskCard
+                task={task}
+                onComplete={(completed) => {
+                  if (!updateTask(task.id, () => ({ completed }))) return;
+                  setRecentlyCompleted((previous) => {
+                    const next = new Set(previous);
+                    if (completed) next.add(task.id);
+                    else next.delete(task.id);
+                    return next;
+                  });
+                }}
+                onSubtasksChange={(change) => updateTask(task.id, (current) => ({
+                  subtasks: change(current.subtasks ?? []),
+                }))}
+                onRename={() => { setEditing(task.id); setTitle(task.title); setOpen(true); }}
+                onDelete={() => setDeleting(task)}
+              />
             </li>
           ))}
         </ul>

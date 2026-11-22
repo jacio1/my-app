@@ -5,7 +5,9 @@ export type RecordFields = {
   updatedAt: string;
 };
 
-export type Task = RecordFields & { completed: boolean };
+export type Subtask = { id: string; title: string; completed: boolean };
+export const MAX_SUBTASKS = 50;
+export type Task = RecordFields & { completed: boolean; subtasks?: Subtask[] };
 export type Entry = RecordFields & { text: string };
 export type Plan = Entry & { date: string };
 export type Goal = Entry & { completed: boolean };
@@ -45,7 +47,8 @@ function list<T extends { id: string }>(value: unknown, valid: (item: unknown) =
 export function parseSnapshot(raw: string): Snapshot {
   const value: unknown = JSON.parse(raw);
   if (!object(value) || ![1, 2].includes(value.schemaVersion as number) ||
-    !list(value.tasks, (item): item is Task => fields(item) && typeof item.completed === "boolean") ||
+    !list(value.tasks, (item): item is Task => fields(item) && typeof item.completed === "boolean" &&
+      (item.subtasks === undefined || (list(item.subtasks, isSubtask) && item.subtasks.length <= MAX_SUBTASKS))) ||
     !list(value.notes, isEntry) || !list(value.diary, isEntry) ||
     (value.schemaVersion === 2 && (
       !list(value.plans, (item): item is Plan => isEntry(item) && ((item as Plan).date === "" || isCalendarDate((item as Plan).date))) ||
@@ -90,6 +93,12 @@ export function mergeRecovery(before: Snapshot, after: Snapshot): Snapshot {
     return [...records.values()];
   }
   return { schemaVersion: 2, tasks: merge(before.tasks, after.tasks), notes: merge(before.notes, after.notes), diary: merge(before.diary, after.diary), plans: merge(before.plans, after.plans), goals: merge(before.goals, after.goals) };
+}
+
+function isSubtask(value: unknown): value is Subtask {
+  return object(value) && typeof value.id === "string" && Boolean(value.id) &&
+    typeof value.title === "string" && Boolean(value.title.trim()) && value.title.length <= 500 &&
+    typeof value.completed === "boolean";
 }
 
 function isEntry(value: unknown): value is Entry {

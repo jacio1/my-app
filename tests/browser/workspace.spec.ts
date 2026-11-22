@@ -1,5 +1,27 @@
 import { expect, test } from "@playwright/test";
 
+test("completed tasks stay crossed out until leaving the page and keep their subtasks", async ({ page }) => {
+  await page.goto("/tasks?new=1");
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("textbox").fill("Собрать вещи");
+  await dialog.getByRole("button", { name: "Добавить", exact: true }).click();
+  await page.getByRole("button", { name: "Подзадача", exact: true }).click();
+  await page.getByRole("textbox", { name: "Название подзадачи" }).fill("Взять зарядку");
+  await page.getByRole("button", { name: "Добавить", exact: true }).click();
+  await page.getByRole("checkbox", { name: "Взять зарядку" }).click();
+  await expect(page.getByRole("checkbox", { name: "Собрать вещи" })).not.toBeChecked();
+  await page.getByRole("heading", { name: "Собрать вещи" }).click();
+  await expect(page.getByRole("heading", { name: "Собрать вещи" })).toHaveCSS("text-decoration-line", "line-through");
+  await page.getByRole("link", { name: "Заметки", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Заметки", exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "Задачи", exact: true }).click();
+  await expect(page).toHaveURL(/\/tasks$/);
+  await expect(page.getByRole("heading", { name: "Собрать вещи" })).toHaveCount(0);
+  await page.getByRole("button", { name: /Выполненные.*1/ }).click();
+  await expect(page.getByRole("checkbox", { name: "Собрать вещи" })).toBeChecked();
+  await expect(page.getByRole("checkbox", { name: "Взять зарядку" })).toBeChecked();
+});
+
 test("plans and goals survive reload, editing and deletion", async ({ page }) => {
   const failures: string[] = [];
   page.on("pageerror", (error) => failures.push(error.message));

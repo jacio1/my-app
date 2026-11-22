@@ -4,13 +4,14 @@ service cloud.firestore {
     function owner(uid) { return request.auth != null && request.auth.uid == uid; }
     function validRecord(data) {
       return data.keys().hasAll(['id', 'section', 'title', 'createdAt', 'updatedAt', 'deleted'])
-        && data.keys().hasOnly(['id', 'section', 'title', 'createdAt', 'updatedAt', 'deleted', 'text', 'date', 'completed'])
+        && data.keys().hasOnly(['id', 'section', 'title', 'createdAt', 'updatedAt', 'deleted', 'text', 'date', 'completed', 'subtasks'])
         && data.id is string && data.id.size() > 0 && data.id.size() <= 128
         && data.title is string && data.title.size() > 0 && data.title.size() <= 500
         && data.section in ['tasks', 'notes', 'diary', 'plans', 'goals']
         && data.createdAt is string && data.updatedAt is string && data.deleted is bool
         && (data.section == 'tasks' || (data.text is string && data.text.size() <= 100000))
         && (!(data.section in ['tasks', 'goals']) || data.completed is bool)
+        && (!('subtasks' in data) || (data.section == 'tasks' && data.subtasks is list && data.subtasks.size() <= 50))
         && (data.section != 'plans' || (data.date is string && (data.date == '' || data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$'))));
     }
     match /users/{uid}/records/{recordId} {
