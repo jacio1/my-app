@@ -2,6 +2,7 @@
   "name": "my-diary-app",
   "version": "0.1.0",
   "private": true,
+  "engines": { "node": "24.x" },
   "scripts": {
     "dev": "next dev -p 1001",
     "build": "next build",
